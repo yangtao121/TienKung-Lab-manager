@@ -4,5 +4,9 @@ setup(
     name="TienKungLabManager",
     version="0.1.0",
     packages=find_packages(),
-    install_requires=["IsaacLab"],
+    include_package_data=True,
+    install_requires=[
+        "IsaacLab",
+        "rsl-rl-lib==2.3.1",
+    ],
 )

@@ -26,8 +26,8 @@ from isaaclab_tasks.manager_based.locomotion.velocity import mdp as vel_mdp
 import tienkung_manager_lab.envs.walk.mdp.observations as walk_obs
 import tienkung_manager_lab.envs.walk.mdp.rewards as walk_rew
 
-from legged_lab.assets.tienkung2_lite import TIENKUNG2LITE_CFG
-from legged_lab.terrains import GRAVEL_TERRAINS_CFG
+from tienkung_manager_lab.assets.tienkung2_lite import TIENKUNG2LITE_CFG
+from tienkung_manager_lab.terrains import GRAVEL_TERRAINS_CFG
 
 
 @configclass

@@ -1,0 +1,1 @@
+recursive-include tienkung_manager_lab/assets *.usd *.urdf *.xml *.STL *.stl *.yaml .asset_hash
