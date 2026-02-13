@@ -131,7 +131,10 @@ class ObservationsCfg:
         gait_cos = ObsTerm(func=walk_obs.gait_cos)
         phase_ratio = ObsTerm(func=walk_obs.phase_ratio)
         base_lin_vel = ObsTerm(func=base_mdp.base_lin_vel)
-        feet_contact = ObsTerm(func=walk_obs.feet_contact, params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="ankle_roll.*")})
+        feet_contact = ObsTerm(
+            func=walk_obs.feet_contact,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=["ankle_roll_l_link", "ankle_roll_r_link"])},
+        )
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -307,11 +310,31 @@ class RewardsCfg:
         params={"delta_t": 0.02},
     )
 
-    ankle_torque = RewTerm(func=walk_rew.ankle_torque, weight=-0.0005)
-    ankle_action = RewTerm(func=walk_rew.ankle_action, weight=-0.001)
-    hip_roll_action = RewTerm(func=walk_rew.hip_roll_action, weight=-1.0)
-    hip_yaw_action = RewTerm(func=walk_rew.hip_yaw_action, weight=-1.0)
-    feet_y_distance = RewTerm(func=walk_rew.feet_y_distance, weight=-2.0)
+    ankle_torque = RewTerm(
+        func=walk_rew.ankle_torque,
+        weight=-0.0005,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["ankle_pitch_l_joint", "ankle_pitch_r_joint", "ankle_roll_l_joint", "ankle_roll_r_joint"])},
+    )
+    ankle_action = RewTerm(
+        func=walk_rew.ankle_action,
+        weight=-0.001,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["ankle_pitch_l_joint", "ankle_pitch_r_joint", "ankle_roll_l_joint", "ankle_roll_r_joint"])},
+    )
+    hip_roll_action = RewTerm(
+        func=walk_rew.hip_roll_action,
+        weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_roll_l_joint", "hip_roll_r_joint"])},
+    )
+    hip_yaw_action = RewTerm(
+        func=walk_rew.hip_yaw_action,
+        weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_yaw_l_joint", "hip_yaw_r_joint"])},
+    )
+    feet_y_distance = RewTerm(
+        func=walk_rew.feet_y_distance,
+        weight=-2.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["ankle_roll_l_link", "ankle_roll_r_link"])},
+    )
 
 
 @configclass

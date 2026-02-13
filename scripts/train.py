@@ -4,13 +4,13 @@ from datetime import datetime
 
 import torch
 from isaaclab.app import AppLauncher
+from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.utils.io import dump_yaml
+from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 from isaaclab_tasks.utils import get_checkpoint_path
 from rsl_rl.runners import OnPolicyRunner
 
 from tienkung_manager_lab.agents.walk_ppo_cfg import WalkPPORunnerCfg
-from tienkung_manager_lab.envs.walk.vec_env_adapter import ManagerRslVecEnvAdapter
-from tienkung_manager_lab.envs.walk.walk_manager_env import WalkManagerRLEnv
 from tienkung_manager_lab.envs.walk.walk_manager_env_cfg import WalkManagerEnvCfg
 from tienkung_manager_lab.utils.cli_args import add_rsl_rl_args, update_rsl_rl_cfg
 
@@ -47,8 +47,8 @@ def train():
         env_cfg.seed = seed
         agent_cfg.seed = seed
 
-    env = WalkManagerRLEnv(env_cfg, render_mode=None)
-    env = ManagerRslVecEnvAdapter(env)
+    env = ManagerBasedRLEnv(cfg=env_cfg, render_mode=None)
+    env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     log_root_path = os.path.join("logs", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)

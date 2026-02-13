@@ -8,6 +8,31 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 
 
+def _compute_gait_phase(env):
+    t = env.episode_length_buf.float() * env.step_dt / env.cfg.gait_cycle
+    gait_phase = torch.zeros((env.num_envs, 2), dtype=torch.float, device=env.device)
+    gait_phase[:, 0] = (t + env.cfg.gait_phase_offset_l) % 1.0
+    gait_phase[:, 1] = (t + env.cfg.gait_phase_offset_r) % 1.0
+    return gait_phase
+
+
+def _compute_phase_ratio(env):
+    return torch.tensor(
+        [env.cfg.gait_air_ratio_l, env.cfg.gait_air_ratio_r], dtype=torch.float, device=env.device
+    ).repeat(env.num_envs, 1)
+
+
+def _feet_force(env, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_force = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :3]
+    return torch.norm(net_force, dim=-1)
+
+
+def _feet_speed(env, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :], dim=-1)
+
+
 def track_lin_vel_xy_yaw_frame_exp(env, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     asset: Articulation = env.scene[asset_cfg.name]
     vel_yaw = math_utils.quat_apply_inverse(math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3])
@@ -92,27 +117,29 @@ def joint_deviation_l1_zero_command(env, command_name: str, asset_cfg: SceneEnti
     return torch.sum(torch.abs(angle), dim=1) * zero_flag
 
 
-def ankle_torque(env):
-    return torch.sum(torch.square(env.robot.data.applied_torque[:, env.ankle_joint_ids]), dim=1)
+def ankle_torque(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.applied_torque[:, asset_cfg.joint_ids]), dim=1)
 
 
-def ankle_action(env):
-    return torch.sum(torch.abs(env.action_manager.action[:, env.ankle_joint_ids]), dim=1)
+def ankle_action(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    return torch.sum(torch.abs(env.action_manager.action[:, asset_cfg.joint_ids]), dim=1)
 
 
-def hip_roll_action(env):
-    return torch.sum(torch.abs(env.action_manager.action[:, [env.left_leg_ids[0], env.right_leg_ids[0]]]), dim=1)
+def hip_roll_action(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    return torch.sum(torch.abs(env.action_manager.action[:, asset_cfg.joint_ids]), dim=1)
 
 
-def hip_yaw_action(env):
-    return torch.sum(torch.abs(env.action_manager.action[:, [env.left_leg_ids[2], env.right_leg_ids[2]]]), dim=1)
+def hip_yaw_action(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    return torch.sum(torch.abs(env.action_manager.action[:, asset_cfg.joint_ids]), dim=1)
 
 
-def feet_y_distance(env):
-    leftfoot = env.robot.data.body_pos_w[:, env.feet_body_ids[0], :] - env.robot.data.root_link_pos_w[:, :]
-    rightfoot = env.robot.data.body_pos_w[:, env.feet_body_ids[1], :] - env.robot.data.root_link_pos_w[:, :]
-    leftfoot_b = math_utils.quat_apply(math_utils.quat_conjugate(env.robot.data.root_link_quat_w[:, :]), leftfoot)
-    rightfoot_b = math_utils.quat_apply(math_utils.quat_conjugate(env.robot.data.root_link_quat_w[:, :]), rightfoot)
+def feet_y_distance(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["ankle_roll_l_link", "ankle_roll_r_link"])):
+    asset: Articulation = env.scene[asset_cfg.name]
+    leftfoot = asset.data.body_pos_w[:, asset_cfg.body_ids[0], :] - asset.data.root_link_pos_w[:, :]
+    rightfoot = asset.data.body_pos_w[:, asset_cfg.body_ids[1], :] - asset.data.root_link_pos_w[:, :]
+    leftfoot_b = math_utils.quat_apply(math_utils.quat_conjugate(asset.data.root_link_quat_w[:, :]), leftfoot)
+    rightfoot_b = math_utils.quat_apply(math_utils.quat_conjugate(asset.data.root_link_quat_w[:, :]), rightfoot)
     y_distance_b = torch.abs(leftfoot_b[:, 1] - rightfoot_b[:, 1] - 0.299)
     y_vel_flag = torch.abs(env.command_manager.get_command("base_velocity")[:, 1]) < 0.1
     return y_distance_b * y_vel_flag
@@ -137,27 +164,48 @@ def gait_clock(phase, air_ratio, delta_t):
     return i_frc, i_spd
 
 
-def gait_feet_frc_perio(env, delta_t: float = 0.02):
-    left_frc_swing_mask = gait_clock(env.gait_phase[:, 0], env.phase_ratio[:, 0], delta_t)[0]
-    right_frc_swing_mask = gait_clock(env.gait_phase[:, 1], env.phase_ratio[:, 1], delta_t)[0]
-    left_frc_score = left_frc_swing_mask * (torch.exp(-200.0 * torch.square(env.avg_feet_force_per_step[:, 0])))
-    right_frc_score = right_frc_swing_mask * (torch.exp(-200.0 * torch.square(env.avg_feet_force_per_step[:, 1])))
+def gait_feet_frc_perio(
+    env,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces", body_names=["ankle_roll_l_link", "ankle_roll_r_link"]),
+    delta_t: float = 0.02,
+):
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+    feet_force = _feet_force(env, sensor_cfg)
+    left_frc_swing_mask = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[0]
+    right_frc_swing_mask = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[0]
+    left_frc_score = left_frc_swing_mask * (torch.exp(-200.0 * torch.square(feet_force[:, 0])))
+    right_frc_score = right_frc_swing_mask * (torch.exp(-200.0 * torch.square(feet_force[:, 1])))
     return left_frc_score + right_frc_score
 
 
-def gait_feet_spd_perio(env, delta_t: float = 0.02):
-    left_spd_support_mask = gait_clock(env.gait_phase[:, 0], env.phase_ratio[:, 0], delta_t)[1]
-    right_spd_support_mask = gait_clock(env.gait_phase[:, 1], env.phase_ratio[:, 1], delta_t)[1]
-    left_spd_score = left_spd_support_mask * (torch.exp(-100.0 * torch.square(env.avg_feet_speed_per_step[:, 0])))
-    right_spd_score = right_spd_support_mask * (torch.exp(-100.0 * torch.square(env.avg_feet_speed_per_step[:, 1])))
+def gait_feet_spd_perio(
+    env,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["ankle_roll_l_link", "ankle_roll_r_link"]),
+    delta_t: float = 0.02,
+):
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+    feet_speed = _feet_speed(env, asset_cfg)
+    left_spd_support_mask = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[1]
+    right_spd_support_mask = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[1]
+    left_spd_score = left_spd_support_mask * (torch.exp(-100.0 * torch.square(feet_speed[:, 0])))
+    right_spd_score = right_spd_support_mask * (torch.exp(-100.0 * torch.square(feet_speed[:, 1])))
     return left_spd_score + right_spd_score
 
 
-def gait_feet_frc_support_perio(env, delta_t: float = 0.02):
-    left_frc_support_mask = gait_clock(env.gait_phase[:, 0], env.phase_ratio[:, 0], delta_t)[1]
-    right_frc_support_mask = gait_clock(env.gait_phase[:, 1], env.phase_ratio[:, 1], delta_t)[1]
-    left_frc_score = left_frc_support_mask * (1.0 - torch.exp(-10.0 * torch.square(env.avg_feet_force_per_step[:, 0])))
-    right_frc_score = right_frc_support_mask * (1.0 - torch.exp(-10.0 * torch.square(env.avg_feet_force_per_step[:, 1])))
+def gait_feet_frc_support_perio(
+    env,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces", body_names=["ankle_roll_l_link", "ankle_roll_r_link"]),
+    delta_t: float = 0.02,
+):
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+    feet_force = _feet_force(env, sensor_cfg)
+    left_frc_support_mask = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[1]
+    right_frc_support_mask = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[1]
+    left_frc_score = left_frc_support_mask * (1.0 - torch.exp(-10.0 * torch.square(feet_force[:, 0])))
+    right_frc_score = right_frc_support_mask * (1.0 - torch.exp(-10.0 * torch.square(feet_force[:, 1])))
     return left_frc_score + right_frc_score
 
 
