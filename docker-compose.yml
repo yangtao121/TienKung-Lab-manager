@@ -1,0 +1,74 @@
+services:
+  tienkung-lab:
+    image: 192.168.5.54:5000/x86/tienkung-lab:latest
+    # 如果需要构建，取消注释以下行
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: tienkung-lab
+
+    # GPU 支持
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+
+    # 网络配置
+    network_mode: host
+
+    # 环境变量 - 无头模式运行
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+      - OMNI_SERVER_ENABLE=0
+      - HEADLESS=1
+      - DISPLAY=${DISPLAY:-}
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - PYTHONPATH=/workspace/TienKung-Lab:/workspace/TienKung-Lab/rsl_rl:/workspace/IsaacLab:/workspace/IsaacLab/source/isaaclab:/workspace/IsaacLab/source/isaaclab_tasks
+
+    # 卷映射
+    volumes:
+      # 项目主目录映射
+      - .:/workspace/TienKung-Lab
+      # 训练日志持久化
+      - tienkung-logs:/workspace/TienKung-Lab/logs
+      # IsaacLab 目录（如果需要访问）
+      - isaac-cache:/root/.nvidia-omniverse/cache
+      - isaac-data:/root/.nvidia-omniverse/data
+      - isaac-docs:/root/.nvidia-omniverse/documents
+
+    # 工作目录
+    working_dir: /workspace/TienKung-Lab
+
+    # 入口点脚本
+    entrypoint: ["/bin/bash", "/workspace/TienKung-Lab/scripts/entrypoint.sh"]
+    command: ["/bin/bash"]
+
+    # 保持容器运行
+    tty: true
+    stdin_open: true
+
+    # IPC 配置（共享内存，对 Isaac Sim 重要）
+    ipc: host
+    shm_size: "16gb"
+
+    # 安全配置
+    security_opt:
+      - seccomp:unconfined
+
+    #  privileged 模式（某些情况下需要）
+    # privileged: true
+
+# 持久化卷
+volumes:
+  tienkung-logs:
+    name: tienkung-logs
+  isaac-cache:
+    name: isaac-cache
+  isaac-data:
+    name: isaac-data
+  isaac-docs:
+    name: isaac-docs
