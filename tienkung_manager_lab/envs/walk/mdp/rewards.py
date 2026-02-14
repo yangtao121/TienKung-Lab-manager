@@ -46,31 +46,9 @@ def track_ang_vel_z_world_exp(env, command_name: str, std: float, asset_cfg: Sce
     return torch.exp(-ang_vel_error / std**2)
 
 
-def lin_vel_z_l2(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
-    asset: Articulation = env.scene[asset_cfg.name]
-    return torch.square(asset.data.root_lin_vel_b[:, 2])
-
-
-def ang_vel_xy_l2(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
-    asset: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(asset.data.root_ang_vel_b[:, :2]), dim=1)
-
-
 def energy(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.norm(torch.abs(asset.data.applied_torque * asset.data.joint_vel), dim=-1)
-
-
-def action_rate_l2(env):
-    return torch.sum(torch.square(env.action_manager.action - env.action_manager.prev_action), dim=1)
-
-
-def undesired_contacts(env, threshold: float, sensor_cfg: SceneEntityCfg):
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    net_contact_forces = contact_sensor.data.net_forces_w_history
-    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold
-    return torch.sum(is_contact, dim=1)
-
 
 def body_orientation_l2(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     asset: Articulation = env.scene[asset_cfg.name]
@@ -115,11 +93,6 @@ def joint_deviation_l1_zero_command(env, command_name: str, asset_cfg: SceneEnti
     cmd = env.command_manager.get_command(command_name)
     zero_flag = (torch.norm(cmd[:, :2], dim=1) + torch.abs(cmd[:, 2])) < 0.1
     return torch.sum(torch.abs(angle), dim=1) * zero_flag
-
-
-def ankle_torque(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
-    asset: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(asset.data.applied_torque[:, asset_cfg.joint_ids]), dim=1)
 
 
 def ankle_action(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
@@ -207,7 +180,3 @@ def gait_feet_frc_support_perio(
     left_frc_score = left_frc_support_mask * (1.0 - torch.exp(-10.0 * torch.square(feet_force[:, 0])))
     right_frc_score = right_frc_support_mask * (1.0 - torch.exp(-10.0 * torch.square(feet_force[:, 1])))
     return left_frc_score + right_frc_score
-
-
-def is_terminated(env):
-    return env.termination_manager.terminated.float()

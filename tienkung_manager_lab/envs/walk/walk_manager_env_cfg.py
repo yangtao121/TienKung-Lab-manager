@@ -215,13 +215,13 @@ class RewardsCfg:
         weight=1.0,
         params={"command_name": "base_velocity", "std": 0.5},
     )
-    lin_vel_z_l2 = RewTerm(func=walk_rew.lin_vel_z_l2, weight=-1.0)
-    ang_vel_xy_l2 = RewTerm(func=walk_rew.ang_vel_xy_l2, weight=-0.05)
+    lin_vel_z_l2 = RewTerm(func=base_mdp.lin_vel_z_l2, weight=-1.0)
+    ang_vel_xy_l2 = RewTerm(func=base_mdp.ang_vel_xy_l2, weight=-0.05)
     energy = RewTerm(func=walk_rew.energy, weight=-1e-3)
     dof_acc_l2 = RewTerm(func=base_mdp.joint_acc_l2, weight=-2.5e-7)
-    action_rate_l2 = RewTerm(func=walk_rew.action_rate_l2, weight=-0.01)
+    action_rate_l2 = RewTerm(func=base_mdp.action_rate_l2, weight=-0.01)
     undesired_contacts = RewTerm(
-        func=walk_rew.undesired_contacts,
+        func=base_mdp.undesired_contacts,
         weight=-1.0,
         params={
             "sensor_cfg": SceneEntityCfg(
@@ -236,7 +236,7 @@ class RewardsCfg:
         weight=-2.0,
     )
     flat_orientation_l2 = RewTerm(func=base_mdp.flat_orientation_l2, weight=-1.0)
-    termination_penalty = RewTerm(func=walk_rew.is_terminated, weight=-200.0)
+    termination_penalty = RewTerm(func=base_mdp.is_terminated, weight=-200.0)
     feet_slide = RewTerm(
         func=walk_rew.feet_slide,
         weight=-0.25,
@@ -311,7 +311,7 @@ class RewardsCfg:
     )
 
     ankle_torque = RewTerm(
-        func=walk_rew.ankle_torque,
+        func=base_mdp.joint_torques_l2,
         weight=-0.0005,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["ankle_pitch_l_joint", "ankle_pitch_r_joint", "ankle_roll_l_joint", "ankle_roll_r_joint"])},
     )
