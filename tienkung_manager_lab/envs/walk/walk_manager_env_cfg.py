@@ -114,9 +114,17 @@ class ObservationsCfg:
         phase_ratio = ObsTerm(func=walk_obs.phase_ratio)
 
         def __post_init__(self):
+            # 是否启用观测噪声污染
+            # True: 对观测添加噪声（如果在 ObsTerm 中定义了 noise），增强策略鲁棒性，便于 sim-to-real 迁移
             self.enable_corruption = True
+            # 是否将所有观测项拼接成一个张量
+            # True: 返回 (num_envs, total_obs_dim) 的单一张量，适合标准 RL 算法
             self.concatenate_terms = True
+            # 历史帧长度，存储过去 N 步的观测
+            # 10: 保存过去 10 帧观测，让网络能够感知速度和趋势
             self.history_length = 10
+            # 是否展平历史维度
+            # True: 将 (N, H, D) 展平为 (N, H*D)，方便 MLP 处理
             self.flatten_history_dim = True
 
     @configclass
@@ -137,9 +145,17 @@ class ObservationsCfg:
         )
 
         def __post_init__(self):
+            # 是否启用观测噪声污染
+            # False: Critic 使用干净的特权信息，不受噪声影响，帮助策略更快收敛
             self.enable_corruption = False
+            # 是否将所有观测项拼接成一个张量
+            # True: 返回 (num_envs, total_obs_dim) 的单一张量
             self.concatenate_terms = True
+            # 历史帧长度，存储过去 N 步的观测
+            # 10: 与 Policy 保持一致的历史帧数
             self.history_length = 10
+            # 是否展平历史维度
+            # True: 将 (N, H, D) 展平为 (N, H*D)
             self.flatten_history_dim = True
 
     policy: PolicyCfg = PolicyCfg()
