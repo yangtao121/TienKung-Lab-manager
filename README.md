@@ -25,6 +25,11 @@ pip install -e /path/to/TienKung-Lab-manager
   --task Isaac-Velocity-Rough-TienKung2Lite-v0 \
   --headless \
   --num_envs 4096
+
+./isaaclab.sh -p scripts/reinforcement_learning/skrl/train.py \
+  --task Isaac-Velocity-Flat-TienKung2Lite-v0 \
+  --headless \
+  --num_envs 4096
 ```
 
 #### 带视频录制
@@ -101,11 +106,17 @@ python scripts/reinforcement_learning/skrl/train.py \
 ## Registry Check
 ```bash
 python -c "import gymnasium as gym; import locomotion; print(gym.spec('Isaac-Velocity-Rough-TienKung2Lite-v0'))"
+python -c "import gymnasium as gym; import locomotion; print(gym.spec('Isaac-Velocity-Flat-TienKung2Lite-v0'))"
 ```
 
 ## Notes
 - Task ID: `Isaac-Velocity-Rough-TienKung2Lite-v0`
+- Task ID: `Isaac-Velocity-Flat-TienKung2Lite-v0`
 - Environment config class:
   `locomotion.rough_env_cfg.TienKung2LiteRoughEnvCfg`
+- Environment config class:
+  `locomotion.flat_env_cfg.TienKung2LiteFlatEnvCfg`
 - skrl config entry point:
   `locomotion:skrl_rough_ppo_cfg.yaml`
+- skrl config entry point:
+  `locomotion:skrl_flat_ppo_cfg.yaml`
