@@ -29,7 +29,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
-from tienkung_manager_lab.assets import ISAAC_ASSET_DIR
+from assets import ISAAC_ASSET_DIR
 
 TIENKUNG2LITE_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

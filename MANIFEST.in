@@ -1,2 +1,4 @@
-recursive-include tienkung_manager_lab/assets *.usd *.urdf *.xml *.STL *.stl *.yaml .asset_hash
-recursive-include tienkung_manager_lab *.yaml
+recursive-include assets *.usd *.urdf *.xml *.STL *.stl *.yaml .asset_hash
+recursive-include locomotion *.yaml
+recursive-include terrains *.yaml
+recursive-include utils *.yaml

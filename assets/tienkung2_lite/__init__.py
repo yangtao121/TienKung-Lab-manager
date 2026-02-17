@@ -16,4 +16,4 @@
 # with additional modifications by the TienKung-Lab Project,
 # and is distributed under the BSD-3-Clause license.
 
-from tienkung_manager_lab.assets.tienkung2_lite.tienkung import *
+from assets.tienkung2_lite.tienkung import *
