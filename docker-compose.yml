@@ -27,12 +27,14 @@ services:
       - HEADLESS=1
       - DISPLAY=${DISPLAY:-}
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
-      - PYTHONPATH=/workspace/TienKung-Lab:/workspace/TienKung-Lab/rsl_rl:/workspace/IsaacLab:/workspace/IsaacLab/source/isaaclab:/workspace/IsaacLab/source/isaaclab_tasks
+      - PYTHONPATH=/workspace/TienKung-Lab:/workspace/TienKung-Lab/rsl_rl:/workspace/IsaacLab:/workspace/IsaacLab/source/isaaclab:/workspace/IsaacLab/source/isaaclab_tasks:/workspace/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/TienKung-Lab
 
     # 卷映射
     volumes:
       # 项目主目录映射
       - .:/workspace/TienKung-Lab
+      # 映射到 IsaacLab manager_based 目录
+      - .:/workspace/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/TienKung-Lab
       # 训练日志持久化
       - tienkung-logs:/workspace/TienKung-Lab/logs
       # IsaacLab 目录（如果需要访问）
@@ -43,8 +45,7 @@ services:
     # 工作目录
     working_dir: /workspace/TienKung-Lab
 
-    # 入口点脚本
-    entrypoint: ["/bin/bash", "/workspace/TienKung-Lab/scripts/entrypoint.sh"]
+    # 启动命令
     command: ["/bin/bash"]
 
     # 保持容器运行
