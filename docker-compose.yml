@@ -28,12 +28,9 @@ services:
       - HEADLESS=1
       - DISPLAY=${DISPLAY:-}
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
-      - PYTHONPATH=/workspace/TienKung-Lab:/workspace/TienKung-Lab/rsl_rl:/workspace/IsaacLab:/workspace/IsaacLab/source/isaaclab:/workspace/IsaacLab/source/isaaclab_tasks:/workspace/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/TienKung-Lab
 
     # 卷映射
     volumes:
-      # 项目主目录映射
-      - .:/workspace/TienKung-Lab
       # 映射到 IsaacLab manager_based 目录
       - .:/workspace/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/TienKung-Lab
       # 训练日志持久化
@@ -68,9 +65,13 @@ services:
 volumes:
   tienkung-logs:
     name: tienkung-logs
+    external: true
   isaac-cache:
     name: isaac-cache
+    external: true
   isaac-data:
     name: isaac-data
+    external: true
   isaac-docs:
     name: isaac-docs
+    external: true
