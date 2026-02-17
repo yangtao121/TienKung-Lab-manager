@@ -32,7 +32,7 @@ services:
     # 卷映射
     volumes:
       # 映射到 IsaacLab manager_based 目录
-      - .:/workspace/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/TienKung-Lab
+      - .:/workspace/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/tienkung-lab
       # 训练日志持久化
       - tienkung-logs:/workspace/TienKung-Lab/logs
       # IsaacLab 目录（如果需要访问）
