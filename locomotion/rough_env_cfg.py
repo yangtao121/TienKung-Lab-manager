@@ -228,14 +228,14 @@ class RewardsCfg:
     )
     track_ang_vel_z_exp = RewTerm(
         func=walk_rew.track_ang_vel_z_world_exp,
-        weight=1.0,
+        weight=2.0,
         params={"command_name": "base_velocity", "std": 0.5},
     )
-    lin_vel_z_l2 = RewTerm(func=base_mdp.lin_vel_z_l2, weight=-1.0)
+    lin_vel_z_l2 = RewTerm(func=base_mdp.lin_vel_z_l2, weight=-0.2)
     ang_vel_xy_l2 = RewTerm(func=base_mdp.ang_vel_xy_l2, weight=-0.05)
-    energy = RewTerm(func=walk_rew.energy, weight=-1e-3)
+    energy = RewTerm(func=walk_rew.energy, weight=-1e-4)
     dof_acc_l2 = RewTerm(func=base_mdp.joint_acc_l2, weight=-2.5e-7)
-    action_rate_l2 = RewTerm(func=base_mdp.action_rate_l2, weight=-0.01)
+    action_rate_l2 = RewTerm(func=base_mdp.action_rate_l2, weight=-0.005)
     undesired_contacts = RewTerm(
         func=base_mdp.undesired_contacts,
         weight=-1.0,
@@ -255,7 +255,7 @@ class RewardsCfg:
     termination_penalty = RewTerm(func=base_mdp.is_terminated, weight=-200.0)
     feet_slide = RewTerm(
         func=walk_rew.feet_slide,
-        weight=-0.25,
+        weight=-0.1,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names="ankle_roll.*"),
             "asset_cfg": SceneEntityCfg("robot", body_names="ankle_roll.*"),
@@ -263,7 +263,7 @@ class RewardsCfg:
     )
     feet_force = RewTerm(
         func=walk_rew.body_force,
-        weight=-3e-3,
+        weight=0.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names="ankle_roll.*"),
             "threshold": 500.0,
@@ -318,12 +318,40 @@ class RewardsCfg:
         },
     )
 
-    gait_feet_frc_perio = RewTerm(func=walk_rew.gait_feet_frc_perio, weight=1.0, params={"delta_t": 0.02})
-    gait_feet_spd_perio = RewTerm(func=walk_rew.gait_feet_spd_perio, weight=1.0, params={"delta_t": 0.02})
+    gait_feet_frc_perio = RewTerm(func=walk_rew.gait_feet_frc_perio, weight=0.0, params={"delta_t": 0.02})
+    gait_feet_spd_perio = RewTerm(func=walk_rew.gait_feet_spd_perio, weight=0.0, params={"delta_t": 0.02})
     gait_feet_frc_support_perio = RewTerm(
         func=walk_rew.gait_feet_frc_support_perio,
-        weight=0.6,
+        weight=0.0,
         params={"delta_t": 0.02},
+    )
+    gait_swing_contact_penalty = RewTerm(
+        func=walk_rew.gait_swing_contact_penalty,
+        weight=-2.0,
+        params={
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
+                preserve_order=True,
+            ),
+            "contact_threshold": 1.0,
+            "delta_t": 0.02,
+        },
+    )
+    gait_support_nocontact_penalty = RewTerm(
+        func=walk_rew.gait_support_nocontact_penalty,
+        weight=-2.0,
+        params={
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
+                preserve_order=True,
+            ),
+            "contact_threshold": 1.0,
+            "delta_t": 0.02,
+        },
     )
 
     ankle_torque = RewTerm(
@@ -338,12 +366,12 @@ class RewardsCfg:
     )
     hip_roll_action = RewTerm(
         func=walk_rew.hip_roll_action,
-        weight=-1.0,
+        weight=0.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_roll_l_joint", "hip_roll_r_joint"])},
     )
     hip_yaw_action = RewTerm(
         func=walk_rew.hip_yaw_action,
-        weight=-1.0,
+        weight=0.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_yaw_l_joint", "hip_yaw_r_joint"])},
     )
     feet_y_distance = RewTerm(

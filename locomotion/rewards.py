@@ -163,6 +163,83 @@ def gait_clock(phase, air_ratio, delta_t):
     return i_frc, i_spd
 
 
+def _zero_command_flag(env, command_name: str, threshold: float = 0.1) -> torch.Tensor:
+    cmd = env.command_manager.get_command(command_name)
+    return torch.norm(cmd[:, :2], dim=1) < threshold
+
+
+def gait_swing_contact_penalty(
+    env,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    contact_threshold: float = 1.0,
+    delta_t: float = 0.02,
+) -> torch.Tensor:
+    """摆动相触地惩罚（0 基线）: swing phase 期间脚不应与地面接触.
+
+    Penalty:
+        swing_mask * 1[||F|| > contact_threshold]
+
+    Note:
+        - 只在非零速度指令时启用（静止指令不强迫走步态）
+        - 使用二值接触避免力尺度/质量变化带来的奖励偏置
+    """
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+    feet_force = _feet_force(env, sensor_cfg)
+
+    # Expect 2 feet. If more are provided, use the first two.
+    if feet_force.shape[1] < 2:
+        feet_force = torch.nn.functional.pad(feet_force, (0, 2 - feet_force.shape[1]))
+    elif feet_force.shape[1] > 2:
+        feet_force = feet_force[:, :2]
+
+    left_swing_w = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[0]
+    right_swing_w = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[0]
+
+    contact = (feet_force > contact_threshold).float()
+    penalty = left_swing_w * contact[:, 0] + right_swing_w * contact[:, 1]
+
+    zero_cmd_flag = _zero_command_flag(env, command_name)
+    return penalty * (~zero_cmd_flag).float()
+
+
+def gait_support_nocontact_penalty(
+    env,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    contact_threshold: float = 1.0,
+    delta_t: float = 0.02,
+) -> torch.Tensor:
+    """支撑相没踩地惩罚（0 基线）: support phase 期间脚应提供支撑（应接触地面）.
+
+    Penalty:
+        support_mask * 1[||F|| <= contact_threshold]
+
+    Note:
+        - 只在非零速度指令时启用（静止指令不强迫走步态）
+        - 使用二值接触避免力尺度/质量变化带来的奖励偏置
+    """
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+    feet_force = _feet_force(env, sensor_cfg)
+
+    # Expect 2 feet. If more are provided, use the first two.
+    if feet_force.shape[1] < 2:
+        feet_force = torch.nn.functional.pad(feet_force, (0, 2 - feet_force.shape[1]))
+    elif feet_force.shape[1] > 2:
+        feet_force = feet_force[:, :2]
+
+    left_support_w = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[1]
+    right_support_w = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[1]
+
+    no_contact = (feet_force <= contact_threshold).float()
+    penalty = left_support_w * no_contact[:, 0] + right_support_w * no_contact[:, 1]
+
+    zero_cmd_flag = _zero_command_flag(env, command_name)
+    return penalty * (~zero_cmd_flag).float()
+
+
 def gait_feet_frc_perio(
     env,
     sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces", body_names=["ankle_roll_l_link", "ankle_roll_r_link"]),
