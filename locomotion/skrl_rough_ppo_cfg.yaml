@@ -58,7 +58,7 @@ agent:
   experiment:
     directory: "tienkung2_lite_rough"
     experiment_name: ""
-    write_interval: auto
+    write_interval: 256
     checkpoint_interval: auto
 
 trainer:
