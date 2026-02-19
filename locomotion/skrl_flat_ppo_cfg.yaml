@@ -37,10 +37,10 @@ agent:
   discount_factor: 0.99
   lambda: 0.97
   learning_rate: 5.0e-05
-  learning_rate_scheduler: null
+  learning_rate_scheduler: KLAdaptiveLR
   learning_rate_scheduler_kwargs:
     kl_threshold: 0.01
-  state_preprocessor: RunningStandardScaler
+  state_preprocessor: null
   state_preprocessor_kwargs: null
   value_preprocessor: null
   value_preprocessor_kwargs: null
@@ -63,5 +63,5 @@ agent:
 
 trainer:
   class: SequentialTrainer
-  timesteps: 36000
+  timesteps: 200000
   environment_info: log
