@@ -107,6 +107,107 @@ def hip_yaw_action(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     return torch.sum(torch.abs(env.action_manager.action[:, asset_cfg.joint_ids]), dim=1)
 
 
+def _cmd_y_yaw_gate(env, command_name: str, cmd_y_scale: float, cmd_yaw_scale: float) -> torch.Tensor:
+    cmd = env.command_manager.get_command(command_name)
+    if cmd.shape[1] < 3:
+        return torch.ones((cmd.shape[0],), dtype=torch.float, device=cmd.device)
+    cmd_y = cmd[:, 1]
+    cmd_yaw = cmd[:, 2]
+    cmd_y_scale = max(cmd_y_scale, 1e-6)
+    cmd_yaw_scale = max(cmd_yaw_scale, 1e-6)
+    return torch.exp(-torch.square(cmd_y / cmd_y_scale) - torch.square(cmd_yaw / cmd_yaw_scale))
+
+
+def swing_hip_yaw_roll_vel_penalty(
+    env,
+    command_name: str,
+    left_joint_cfg: SceneEntityCfg,
+    right_joint_cfg: SceneEntityCfg,
+    delta_t: float = 0.02,
+    vel_scale: float = 4.0,
+    cmd_y_scale: float = 0.25,
+    cmd_yaw_scale: float = 0.35,
+) -> torch.Tensor:
+    """摆动相髋 yaw/roll 关节速度惩罚（0 基线）: swing phase 抑制摆动腿的扭转/横摆。
+
+    Penalty:
+        swing_mask * tanh(sum(joint_vel^2) / vel_scale^2)
+
+    Note:
+        - 使用 tanh 饱和，减少尺度敏感性
+        - 命令门控：侧移/转向越大惩罚越弱（尽量不破坏转向/侧移能力）
+    """
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+
+    left_swing_w = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[0]
+    right_swing_w = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[0]
+
+    # Assume both joint cfg refer to the same articulation (robot).
+    asset: Articulation = env.scene[left_joint_cfg.name]
+    joint_vel = asset.data.joint_vel
+
+    vel_scale = max(vel_scale, 1e-6)
+    left_vel = joint_vel[:, left_joint_cfg.joint_ids]
+    right_vel = joint_vel[:, right_joint_cfg.joint_ids]
+
+    left_pen = torch.tanh(torch.sum(torch.square(left_vel), dim=1) / (vel_scale**2))
+    right_pen = torch.tanh(torch.sum(torch.square(right_vel), dim=1) / (vel_scale**2))
+
+    gate = _cmd_y_yaw_gate(env, command_name, cmd_y_scale, cmd_yaw_scale)
+    return (left_swing_w * left_pen + right_swing_w * right_pen) * gate
+
+
+def swing_feet_lateral_speed_penalty(
+    env,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+    delta_t: float = 0.02,
+    vy_scale: float = 0.5,
+    cmd_y_scale: float = 0.25,
+    cmd_yaw_scale: float = 0.35,
+) -> torch.Tensor:
+    """摆动相脚端侧向速度惩罚（0 基线）: swing phase 抑制摆动脚在空中左右乱摆。
+
+    - 使用相对机体速度 (v_foot - v_root)
+    - 变换到 root yaw 坐标系后取 |vy|
+    - 使用 tanh 饱和减少尺度敏感性
+    - 命令门控：侧移/转向越大惩罚越弱
+    """
+    gait_phase = _compute_gait_phase(env)
+    phase_ratio = _compute_phase_ratio(env)
+
+    left_swing_w = gait_clock(gait_phase[:, 0], phase_ratio[:, 0], delta_t)[0]
+    right_swing_w = gait_clock(gait_phase[:, 1], phase_ratio[:, 1], delta_t)[0]
+
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    feet_vel_w = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :3]
+    # Expect 2 feet. If more are provided, use the first two.
+    if feet_vel_w.shape[1] < 2:
+        feet_vel_w = torch.nn.functional.pad(feet_vel_w, (0, 0, 0, 2 - feet_vel_w.shape[1]))
+    elif feet_vel_w.shape[1] > 2:
+        feet_vel_w = feet_vel_w[:, :2]
+
+    root_vel_w = asset.data.root_lin_vel_w[:, :3]
+    v_rel_w = feet_vel_w - root_vel_w.unsqueeze(1)
+
+    root_yaw_quat = math_utils.yaw_quat(asset.data.root_quat_w)
+    root_yaw_quat = root_yaw_quat.unsqueeze(1).expand(-1, v_rel_w.shape[1], -1)
+    v_rel_yaw = math_utils.quat_apply_inverse(root_yaw_quat, v_rel_w)
+
+    vy_scale = max(vy_scale, 1e-6)
+    vy = torch.abs(v_rel_yaw[:, :, 1])
+    pen = torch.tanh(torch.square(vy / vy_scale))
+
+    # Match gait definition: left then right.
+    left_pen = pen[:, 0]
+    right_pen = pen[:, 1]
+
+    gate = _cmd_y_yaw_gate(env, command_name, cmd_y_scale, cmd_yaw_scale)
+    return (left_swing_w * left_pen + right_swing_w * right_pen) * gate
+
+
 def feet_y_distance(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["ankle_roll_l_link", "ankle_roll_r_link"])):
     asset: Articulation = env.scene[asset_cfg.name]
     leftfoot = asset.data.body_pos_w[:, asset_cfg.body_ids[0], :] - asset.data.root_link_pos_w[:, :]

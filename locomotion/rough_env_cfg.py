@@ -361,6 +361,43 @@ class RewardsCfg:
         },
     )
 
+    swing_hip_yaw_roll_vel_penalty = RewTerm(
+        func=walk_rew.swing_hip_yaw_roll_vel_penalty,
+        weight=-0.05,
+        params={
+            "command_name": "base_velocity",
+            "left_joint_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=["hip_yaw_l_joint", "hip_roll_l_joint"],
+            ),
+            "right_joint_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=["hip_yaw_r_joint", "hip_roll_r_joint"],
+            ),
+            "delta_t": 0.02,
+            "vel_scale": 4.0,
+            "cmd_y_scale": 0.25,
+            "cmd_yaw_scale": 0.35,
+        },
+    )
+
+    swing_feet_lateral_speed_penalty = RewTerm(
+        func=walk_rew.swing_feet_lateral_speed_penalty,
+        weight=-0.02,
+        params={
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
+                preserve_order=True,
+            ),
+            "delta_t": 0.02,
+            "vy_scale": 0.5,
+            "cmd_y_scale": 0.25,
+            "cmd_yaw_scale": 0.35,
+        },
+    )
+
     ankle_torque = RewTerm(
         func=base_mdp.joint_torques_l2,
         weight=-0.0005,
