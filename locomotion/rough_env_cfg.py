@@ -363,7 +363,7 @@ class RewardsCfg:
 
     swing_hip_yaw_roll_vel_penalty = RewTerm(
         func=walk_rew.swing_hip_yaw_roll_vel_penalty,
-        weight=-0.05,
+        weight=-0.2,
         params={
             "command_name": "base_velocity",
             "left_joint_cfg": SceneEntityCfg(
@@ -375,15 +375,15 @@ class RewardsCfg:
                 joint_names=["hip_yaw_r_joint", "hip_roll_r_joint"],
             ),
             "delta_t": 0.02,
-            "vel_scale": 4.0,
-            "cmd_y_scale": 0.25,
-            "cmd_yaw_scale": 0.35,
+            "vel_scale": 2.5,
+            "cmd_y_scale": 0.6,
+            "cmd_yaw_scale": 0.8,
         },
     )
 
     swing_feet_lateral_speed_penalty = RewTerm(
         func=walk_rew.swing_feet_lateral_speed_penalty,
-        weight=-0.02,
+        weight=-0.06,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg(
@@ -392,9 +392,9 @@ class RewardsCfg:
                 preserve_order=True,
             ),
             "delta_t": 0.02,
-            "vy_scale": 0.5,
-            "cmd_y_scale": 0.25,
-            "cmd_yaw_scale": 0.35,
+            "vy_scale": 0.35,
+            "cmd_y_scale": 0.6,
+            "cmd_yaw_scale": 0.8,
         },
     )
 
@@ -405,17 +405,17 @@ class RewardsCfg:
     )
     ankle_action = RewTerm(
         func=walk_rew.ankle_action,
-        weight=-0.001,
+        weight=-0.003,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["ankle_pitch_l_joint", "ankle_pitch_r_joint", "ankle_roll_l_joint", "ankle_roll_r_joint"])},
     )
     hip_roll_action = RewTerm(
         func=walk_rew.hip_roll_action,
-        weight=0.0,
+        weight=-0.002,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_roll_l_joint", "hip_roll_r_joint"])},
     )
     hip_yaw_action = RewTerm(
         func=walk_rew.hip_yaw_action,
-        weight=0.0,
+        weight=-0.002,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_yaw_l_joint", "hip_yaw_r_joint"])},
     )
     feet_y_distance = RewTerm(
