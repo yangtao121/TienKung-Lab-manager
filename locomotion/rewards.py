@@ -266,7 +266,12 @@ def gait_clock(phase, air_ratio, delta_t):
 
 def _zero_command_flag(env, command_name: str, threshold: float = 0.1) -> torch.Tensor:
     cmd = env.command_manager.get_command(command_name)
-    return torch.norm(cmd[:, :2], dim=1) < threshold
+    cmd_xy = torch.norm(cmd[:, :2], dim=1)
+    if cmd.shape[1] < 3:
+        cmd_mag = cmd_xy
+    else:
+        cmd_mag = cmd_xy + torch.abs(cmd[:, 2])
+    return cmd_mag < threshold
 
 
 def gait_swing_contact_penalty(
