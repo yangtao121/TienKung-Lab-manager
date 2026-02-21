@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from dataclasses import MISSING
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -28,6 +27,36 @@ import locomotion.rewards as walk_rew
 
 from assets.tienkung2_lite import TIENKUNG2LITE_CFG
 from terrains import GRAVEL_TERRAINS_CFG
+
+
+LEG_JOINT_NAMES = [
+    "hip_roll_l_joint",
+    "hip_pitch_l_joint",
+    "hip_yaw_l_joint",
+    "knee_pitch_l_joint",
+    "ankle_pitch_l_joint",
+    "ankle_roll_l_joint",
+    "hip_roll_r_joint",
+    "hip_pitch_r_joint",
+    "hip_yaw_r_joint",
+    "knee_pitch_r_joint",
+    "ankle_pitch_r_joint",
+    "ankle_roll_r_joint",
+]
+
+ARM_JOINT_NAMES = [
+    "shoulder_pitch_l_joint",
+    "shoulder_roll_l_joint",
+    "shoulder_yaw_l_joint",
+    "elbow_pitch_l_joint",
+    "shoulder_pitch_r_joint",
+    "shoulder_roll_r_joint",
+    "shoulder_yaw_r_joint",
+    "elbow_pitch_r_joint",
+]
+
+FEET_BODY_NAMES = ["ankle_roll_l_link", "ankle_roll_r_link"]
+KNEE_BODY_NAMES = ["knee_pitch_l_link", "knee_pitch_r_link"]
 
 
 @configclass
@@ -93,7 +122,8 @@ class CommandsCfg:
 class ActionsCfg:
     joint_pos = base_mdp.JointPositionActionCfg(
         asset_name="robot",
-        joint_names=[".*"],
+        joint_names=LEG_JOINT_NAMES,
+        preserve_order=True,
         scale=0.25,
         use_default_offset=True,
     )
@@ -106,25 +136,25 @@ class ObservationsCfg:
         base_ang_vel = ObsTerm(func=base_mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         projected_gravity = ObsTerm(func=base_mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
         velocity_commands = ObsTerm(func=base_mdp.generated_commands, params={"command_name": "base_velocity"})
-        joint_pos = ObsTerm(func=base_mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
-        joint_vel = ObsTerm(func=base_mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
+        joint_pos = ObsTerm(
+            func=base_mdp.joint_pos_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+            noise=Unoise(n_min=-0.01, n_max=0.01),
+        )
+        joint_vel = ObsTerm(
+            func=base_mdp.joint_vel_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+            noise=Unoise(n_min=-1.5, n_max=1.5),
+        )
         actions = ObsTerm(func=base_mdp.last_action)
         gait_sin = ObsTerm(func=walk_obs.gait_sin)
         gait_cos = ObsTerm(func=walk_obs.gait_cos)
         phase_ratio = ObsTerm(func=walk_obs.phase_ratio)
 
         def __post_init__(self):
-            # 是否启用观测噪声污染
-            # True: 对观测添加噪声（如果在 ObsTerm 中定义了 noise），增强策略鲁棒性，便于 sim-to-real 迁移
             self.enable_corruption = True
-            # 是否将所有观测项拼接成一个张量
-            # True: 返回 (num_envs, total_obs_dim) 的单一张量，适合标准 RL 算法
             self.concatenate_terms = True
-            # 历史帧长度，存储过去 N 步的观测
-            # 10: 保存过去 10 帧观测，让网络能够感知速度和趋势
             self.history_length = 10
-            # 是否展平历史维度
-            # True: 将 (N, H, D) 展平为 (N, H*D)，方便 MLP 处理
             self.flatten_history_dim = True
 
     @configclass
@@ -132,8 +162,14 @@ class ObservationsCfg:
         base_ang_vel = ObsTerm(func=base_mdp.base_ang_vel)
         projected_gravity = ObsTerm(func=base_mdp.projected_gravity)
         velocity_commands = ObsTerm(func=base_mdp.generated_commands, params={"command_name": "base_velocity"})
-        joint_pos = ObsTerm(func=base_mdp.joint_pos_rel)
-        joint_vel = ObsTerm(func=base_mdp.joint_vel_rel)
+        joint_pos = ObsTerm(
+            func=base_mdp.joint_pos_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+        )
+        joint_vel = ObsTerm(
+            func=base_mdp.joint_vel_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+        )
         actions = ObsTerm(func=base_mdp.last_action)
         gait_sin = ObsTerm(func=walk_obs.gait_sin)
         gait_cos = ObsTerm(func=walk_obs.gait_cos)
@@ -141,21 +177,13 @@ class ObservationsCfg:
         base_lin_vel = ObsTerm(func=base_mdp.base_lin_vel)
         feet_contact = ObsTerm(
             func=walk_obs.feet_contact,
-            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=["ankle_roll_l_link", "ankle_roll_r_link"])},
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FEET_BODY_NAMES, preserve_order=True)},
         )
 
         def __post_init__(self):
-            # 是否启用观测噪声污染
-            # False: Critic 使用干净的特权信息，不受噪声影响，帮助策略更快收敛
             self.enable_corruption = False
-            # 是否将所有观测项拼接成一个张量
-            # True: 返回 (num_envs, total_obs_dim) 的单一张量
             self.concatenate_terms = True
-            # 历史帧长度，存储过去 N 步的观测
-            # 10: 与 Policy 保持一致的历史帧数
             self.history_length = 10
-            # 是否展平历史维度
-            # True: 将 (N, H, D) 展平为 (N, H*D)
             self.flatten_history_dim = True
 
     policy: PolicyCfg = PolicyCfg()
@@ -208,6 +236,17 @@ class EventCfg:
         params={
             "position_range": (0.5, 1.5),
             "velocity_range": (0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True),
+        },
+    )
+
+    reset_arm_joints = EventTerm(
+        func=base_mdp.reset_joints_by_scale,
+        mode="reset",
+        params={
+            "position_range": (1.0, 1.0),
+            "velocity_range": (0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES, preserve_order=True),
         },
     )
 
@@ -221,207 +260,162 @@ class EventCfg:
 
 @configclass
 class RewardsCfg:
-    track_lin_vel_xy_exp = RewTerm(
-        func=walk_rew.track_lin_vel_xy_yaw_frame_exp,
+    joint_pos = RewTerm(
+        func=walk_rew.joint_pos,
+        weight=1.6,
+        params={
+            "target_joint_pos_scale": 0.17,
+            "cycle_time": 0.64,
+            "asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True),
+        },
+    )
+    feet_clearance = RewTerm(
+        func=walk_rew.FeetClearanceReward,
         weight=1.0,
-        params={"command_name": "base_velocity", "std": 0.5},
+        params={
+            "target_feet_height": 0.06,
+            "cycle_time": 0.64,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FEET_BODY_NAMES, preserve_order=True),
+            "asset_cfg": SceneEntityCfg("robot", body_names=FEET_BODY_NAMES, preserve_order=True),
+        },
     )
-    track_ang_vel_z_exp = RewTerm(
-        func=walk_rew.track_ang_vel_z_world_exp,
-        weight=2.0,
-        params={"command_name": "base_velocity", "std": 0.5},
+    feet_contact_number = RewTerm(
+        func=walk_rew.feet_contact_number,
+        weight=1.2,
+        params={
+            "cycle_time": 0.64,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FEET_BODY_NAMES, preserve_order=True),
+        },
     )
-    
+    feet_air_time = RewTerm(
+        func=walk_rew.FeetAirTimeReward,
+        weight=1.0,
+        params={
+            "cycle_time": 0.64,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FEET_BODY_NAMES, preserve_order=True),
+        },
+    )
+    foot_slip = RewTerm(
+        func=walk_rew.foot_slip,
+        weight=-0.05,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FEET_BODY_NAMES, preserve_order=True),
+            "asset_cfg": SceneEntityCfg("robot", body_names=FEET_BODY_NAMES, preserve_order=True),
+        },
+    )
+    feet_distance = RewTerm(
+        func=walk_rew.feet_distance,
+        weight=0.2,
+        params={
+            "min_dist": 0.2,
+            "max_dist": 0.5,
+            "asset_cfg": SceneEntityCfg("robot", body_names=FEET_BODY_NAMES, preserve_order=True),
+        },
+    )
+    knee_distance = RewTerm(
+        func=walk_rew.knee_distance,
+        weight=0.2,
+        params={
+            "min_dist": 0.2,
+            "max_dist": 0.5,
+            "asset_cfg": SceneEntityCfg("robot", body_names=KNEE_BODY_NAMES, preserve_order=True),
+        },
+    )
+    feet_contact_forces = RewTerm(
+        func=walk_rew.feet_contact_forces,
+        weight=-0.01,
+        params={
+            "max_contact_force": 700.0,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FEET_BODY_NAMES, preserve_order=True),
+        },
+    )
+    tracking_lin_vel = RewTerm(
+        func=walk_rew.tracking_lin_vel,
+        weight=1.2,
+        params={
+            "command_name": "base_velocity",
+            "tracking_sigma": 5.0,
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+    tracking_ang_vel = RewTerm(
+        func=walk_rew.tracking_ang_vel,
+        weight=1.1,
+        params={
+            "command_name": "base_velocity",
+            "tracking_sigma": 5.0,
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+    vel_mismatch_exp = RewTerm(
+        func=walk_rew.vel_mismatch_exp,
+        weight=0.5,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    low_speed = RewTerm(
+        func=walk_rew.low_speed,
+        weight=0.2,
+        params={"command_name": "base_velocity", "asset_cfg": SceneEntityCfg("robot")},
+    )
+    track_vel_hard = RewTerm(
+        func=walk_rew.track_vel_hard,
+        weight=0.5,
+        params={"command_name": "base_velocity", "asset_cfg": SceneEntityCfg("robot")},
+    )
+    default_joint_pos = RewTerm(
+        func=walk_rew.default_joint_pos,
+        weight=0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+    )
+    orientation = RewTerm(
+        func=walk_rew.orientation,
+        weight=1.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
     base_height = RewTerm(
-    func=base_mdp.base_height_l2,
-    weight=-5.0,
-    params={"target_height": 0.89},
+        func=walk_rew.base_height,
+        weight=0.2,
+        params={
+            "base_height_target": 0.89,
+            "cycle_time": 0.64,
+            "feet_body_cfg": SceneEntityCfg("robot", body_names=FEET_BODY_NAMES, preserve_order=True),
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
     )
-
-    lin_vel_z_l2 = RewTerm(func=base_mdp.lin_vel_z_l2, weight=-0.2)
-    ang_vel_xy_l2 = RewTerm(func=base_mdp.ang_vel_xy_l2, weight=-0.05)
-    energy = RewTerm(func=walk_rew.energy, weight=-1e-4)
-    dof_acc_l2 = RewTerm(func=base_mdp.joint_acc_l2, weight=-2.5e-7)
-    action_rate_l2 = RewTerm(func=base_mdp.action_rate_l2, weight=-0.005)
-    undesired_contacts = RewTerm(
-        func=base_mdp.undesired_contacts,
+    base_acc = RewTerm(
+        func=walk_rew.BaseAccReward,
+        weight=0.2,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    action_smoothness = RewTerm(
+        func=walk_rew.ActionSmoothnessReward,
+        weight=-0.002,
+    )
+    torques = RewTerm(
+        func=walk_rew.torques,
+        weight=-1.0e-5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+    )
+    dof_vel = RewTerm(
+        func=walk_rew.dof_vel,
+        weight=-5.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+    )
+    dof_acc = RewTerm(
+        func=walk_rew.dof_acc,
+        weight=-1.0e-7,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_NAMES, preserve_order=True)},
+    )
+    collision = RewTerm(
+        func=walk_rew.collision,
         weight=-1.0,
         params={
-            "sensor_cfg": SceneEntityCfg(
-                "contact_forces", body_names=["knee_pitch.*", "shoulder_roll.*", "elbow_pitch.*", "pelvis"]
-            ),
-            "threshold": 1.0,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["knee_pitch.*", "pelvis"]),
         },
     )
-    body_orientation_l2 = RewTerm(
-        func=walk_rew.body_orientation_l2,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names="pelvis")},
-        weight=-2.0,
-    )
-    flat_orientation_l2 = RewTerm(func=base_mdp.flat_orientation_l2, weight=-1.0)
-    termination_penalty = RewTerm(func=base_mdp.is_terminated, weight=-200.0)
-    feet_slide = RewTerm(
-        func=walk_rew.feet_slide,
-        weight=-0.1,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="ankle_roll.*"),
-            "asset_cfg": SceneEntityCfg("robot", body_names="ankle_roll.*"),
-        },
-    )
-    feet_force = RewTerm(
-        func=walk_rew.body_force,
-        weight=0.0,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="ankle_roll.*"),
-            "threshold": 500.0,
-            "max_reward": 400.0,
-        },
-    )
-    feet_too_near = RewTerm(
-        func=walk_rew.feet_too_near_humanoid,
-        weight=-2.0,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names=["ankle_roll.*"]), "threshold": 0.2},
-    )
-    feet_stumble = RewTerm(
-        func=walk_rew.feet_stumble,
-        weight=-2.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=["ankle_roll.*"])},
-    )
-    dof_pos_limits = RewTerm(func=base_mdp.joint_pos_limits, weight=-2.0)
-
-    joint_deviation_hip = RewTerm(
-        func=walk_rew.joint_deviation_l1_zero_command,
-        weight=-0.15,
-        params={
-            "command_name": "base_velocity",
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=[
-                    "hip_yaw_.*_joint",
-                    "hip_roll_.*_joint",
-                    "shoulder_pitch_.*_joint",
-                    "elbow_pitch_.*_joint",
-                ],
-            ),
-        },
-    )
-    joint_deviation_arms = RewTerm(
-        func=walk_rew.joint_deviation_l1_zero_command,
-        weight=-0.2,
-        params={
-            "command_name": "base_velocity",
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["shoulder_roll_.*_joint", "shoulder_yaw_.*_joint"]),
-        },
-    )
-    joint_deviation_legs = RewTerm(
-        func=walk_rew.joint_deviation_l1_zero_command,
-        weight=-0.02,
-        params={
-            "command_name": "base_velocity",
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=["hip_pitch_.*_joint", "knee_pitch_.*_joint", "ankle_pitch_.*_joint", "ankle_roll_.*_joint"],
-            ),
-        },
-    )
-
-    gait_feet_frc_perio = RewTerm(func=walk_rew.gait_feet_frc_perio, weight=0.0, params={"delta_t": 0.02})
-    gait_feet_spd_perio = RewTerm(func=walk_rew.gait_feet_spd_perio, weight=0.0, params={"delta_t": 0.02})
-    gait_feet_frc_support_perio = RewTerm(
-        func=walk_rew.gait_feet_frc_support_perio,
-        weight=0.0,
-        params={"delta_t": 0.02},
-    )
-    gait_swing_contact_penalty = RewTerm(
-        func=walk_rew.gait_swing_contact_penalty,
-        weight=-2.0,
-        params={
-            "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg(
-                "contact_forces",
-                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
-                preserve_order=True,
-            ),
-            "contact_threshold": 1.0,
-            "delta_t": 0.02,
-        },
-    )
-    gait_support_nocontact_penalty = RewTerm(
-        func=walk_rew.gait_support_nocontact_penalty,
-        weight=-2.0,
-        params={
-            "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg(
-                "contact_forces",
-                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
-                preserve_order=True,
-            ),
-            "contact_threshold": 1.0,
-            "delta_t": 0.02,
-        },
-    )
-
-    swing_hip_yaw_roll_vel_penalty = RewTerm(
-        func=walk_rew.swing_hip_yaw_roll_vel_penalty,
-        weight=-0.2,
-        params={
-            "command_name": "base_velocity",
-            "left_joint_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=["hip_yaw_l_joint", "hip_roll_l_joint"],
-            ),
-            "right_joint_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=["hip_yaw_r_joint", "hip_roll_r_joint"],
-            ),
-            "delta_t": 0.02,
-            "vel_scale": 2.5,
-            "cmd_y_scale": 0.6,
-            "cmd_yaw_scale": 0.8,
-        },
-    )
-
-    swing_feet_lateral_speed_penalty = RewTerm(
-        func=walk_rew.swing_feet_lateral_speed_penalty,
-        weight=-0.06,
-        params={
-            "command_name": "base_velocity",
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
-                preserve_order=True,
-            ),
-            "delta_t": 0.02,
-            "vy_scale": 0.35,
-            "cmd_y_scale": 0.6,
-            "cmd_yaw_scale": 0.8,
-        },
-    )
-
-    ankle_torque = RewTerm(
-        func=base_mdp.joint_torques_l2,
-        weight=-0.0005,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["ankle_pitch_l_joint", "ankle_pitch_r_joint", "ankle_roll_l_joint", "ankle_roll_r_joint"])},
-    )
-    ankle_action = RewTerm(
-        func=walk_rew.ankle_action,
-        weight=-0.003,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["ankle_pitch_l_joint", "ankle_pitch_r_joint", "ankle_roll_l_joint", "ankle_roll_r_joint"])},
-    )
-    hip_roll_action = RewTerm(
-        func=walk_rew.hip_roll_action,
-        weight=-0.002,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_roll_l_joint", "hip_roll_r_joint"])},
-    )
-    hip_yaw_action = RewTerm(
-        func=walk_rew.hip_yaw_action,
-        weight=-0.002,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["hip_yaw_l_joint", "hip_yaw_r_joint"])},
-    )
-    feet_y_distance = RewTerm(
-        func=walk_rew.feet_y_distance,
-        weight=-2.0,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names=["ankle_roll_l_link", "ankle_roll_r_link"])},
+    positive_reward_clip = RewTerm(
+        func=walk_rew.positive_reward_clip,
+        weight=1.0,
     )
 
 
@@ -431,10 +425,7 @@ class TerminationsCfg:
     base_contact = DoneTerm(
         func=base_mdp.illegal_contact,
         params={
-            "sensor_cfg": SceneEntityCfg(
-                "contact_forces",
-                body_names=["knee_pitch.*", "shoulder_roll.*", "elbow_pitch.*", "pelvis"],
-            ),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["pelvis"]),
             "threshold": 1.0,
         },
     )
@@ -456,11 +447,12 @@ class TienKung2LiteRoughEnvCfg(ManagerBasedRLEnvCfg):
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
-    gait_cycle: float = 0.85
-    gait_air_ratio_l: float = 0.38
-    gait_air_ratio_r: float = 0.38
-    gait_phase_offset_l: float = 0.38
-    gait_phase_offset_r: float = 0.88
+    # kept for gait observation terms
+    gait_cycle: float = 0.64
+    gait_air_ratio_l: float = 0.5
+    gait_air_ratio_r: float = 0.5
+    gait_phase_offset_l: float = 0.0
+    gait_phase_offset_r: float = 0.5
 
     def __post_init__(self):
         self.decimation = 4
@@ -474,3 +466,4 @@ class TienKung2LiteRoughEnvCfg(ManagerBasedRLEnvCfg):
 
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
+
